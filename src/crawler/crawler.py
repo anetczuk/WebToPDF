@@ -50,7 +50,7 @@ class VisitSet:
     def add_list(self, aList):
         for item in aList:
             ##print item
-            self.add( aList )
+            self.add( item )
             
     def items_size(self):
         return len( self.items_set )

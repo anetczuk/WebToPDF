@@ -41,6 +41,14 @@ class VisitSetTest(unittest.TestCase):
         self.assertEqual(a_set.items_size(), 2)
         self.assertEqual(a_set.queue_size(), 2)
         
+    def test_add_list(self):
+        a_set = crawler.VisitSet()
+        
+        a_set.add_list( ["aaa", "ccc"] )
+
+        self.assertEqual(a_set.items_size(), 2)
+        self.assertEqual(a_set.queue_size(), 2)
+        
     def test_next_empty(self):
         a_set = crawler.VisitSet()
         self.assertEqual(a_set.next(), "")
