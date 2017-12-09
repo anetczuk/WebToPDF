@@ -24,8 +24,11 @@
 
 
 
+ARGS_NO=$#
+
 SHOW_HELP=""
 INPUT_FILE=""
+ONLINE_CONVERT=""
 SKIP_CONVERT=""
 SKIP_SHORTEN=""
 SKIP_JOIN=""
@@ -37,6 +40,9 @@ case $i in
                             ;;
     -i=*|--input=*)         INPUT_FILE="${i#*=}"
                             shift                   # past argument=value
+                            ;;
+    -oc|--onlineconvert)    ONLINE_CONVERT=1
+                            shift                   # past argument with no value
                             ;;
     -sc|--skipconvert)      SKIP_CONVERT=1
                             shift                   # past argument with no value
@@ -54,16 +60,16 @@ done
 
 function info {
     echo "Convert web page to PDF"
-    echo "params: -h|-i|-sc|-ss|-sj"
+    echo "params: -h|-i|-oc|-sc|-ss|-sj"
 }
 
 
-if [ $# -eq 0 ]; then
+if [ $ARGS_NO -eq 0 ]; then
     info
     echo "No params given"
     exit 0
 fi
-if [ -z "$SHOW_HELP" ]; then
+if [ -n "$SHOW_HELP" ]; then
     info
     exit 0
 fi
@@ -79,22 +85,22 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 function check_command {
     if [ $# -lt 1 ]; then
-	    echo "missing parameter - command name"
-	    exit 1;
+      echo "missing parameter - command name"
+      exit 1;
     fi
     suggest_pkg=""
     if [ $# -gt 1 ]; then
-	     suggest_pkg="$2"
+       suggest_pkg="$2"
     fi
-	
+  
     pckg_name="$1"
     if ! type "$pckg_name" &> /dev/null; then
-    	echo "Missing command: $pckg_name"
-    	if [ ! -z $suggest_pkg ]; then
-    	    echo "Suggested package $suggest_pkg"
-    	    exit 1;
-    	fi
-	    exit 1
+      echo "Missing command: $pckg_name"
+      if [ ! -z $suggest_pkg ]; then
+          echo "Suggested package $suggest_pkg"
+          exit 1;
+      fi
+      exit 1
     fi
 }
 
@@ -113,13 +119,23 @@ mkdir -p "$TMP_DIR"
 function convert_webpage {
     COUNTER=0
     while read line; do           
-    	COUNTER=$((COUNTER+1))
-    	##echo "$COUNTER url: $line"
-    	output_file="$TMP_DIR/$(printf "%04d" $COUNTER).pdf"
-    	##echo "$output_file url: $line"
-    	
-    	echo "Converting $line to $output_file"
-    	wkhtmltopdf $line $output_file
+      COUNTER=$((COUNTER+1))
+      ##echo "$COUNTER url: $line"
+      output_file="$TMP_DIR/$(printf "%04d" $COUNTER).pdf"
+      ##echo "$output_file url: $line"
+      
+      echo "Converting $line to $output_file"
+        if [ -n "$ONLINE_CONVERT" ]; then
+            ## online converter
+            $SCRIPT_DIR/onlineconverter.py --link=$line --output=$output_file
+            if [ $? -gt 0 ]; then
+                echo "Unable to use online converter"
+                exit 1
+            fi
+        else
+            ## local converter
+          wkhtmltopdf $line $output_file
+        fi
     done < "$INPUT_FILE"
 }
 
@@ -146,22 +162,22 @@ function join_loop {
     FIRST_FILE="1"
 
     for pdf_file in $TMP_DIR/*; do
-    	if [ ! -z $FIRST_FILE ]; then
-    	    FIRST_FILE=""
-    	    ##echo "first"
-    	    cp "$pdf_file" "$TMP_OUT_PDF1"
-    	    continue
-    	fi
-    	
-    	echo "Merging: $pdf_file"
-    	
-    	##gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile="$OUT_PDF" "$OUT_PDF" "$pdf_file"
-    	
-    	gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile="$TMP_OUT_PDF2" "$TMP_OUT_PDF1" "$pdf_file"
-    	
-    	TMP=$TMP_OUT_PDF2
-    	TMP_OUT_PDF2=$TMP_OUT_PDF1
-    	TMP_OUT_PDF1=$TMP
+      if [ ! -z $FIRST_FILE ]; then
+          FIRST_FILE=""
+          ##echo "first"
+          cp "$pdf_file" "$TMP_OUT_PDF1"
+          continue
+      fi
+      
+      echo "Merging: $pdf_file"
+      
+      ##gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile="$OUT_PDF" "$OUT_PDF" "$pdf_file"
+      
+      gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile="$TMP_OUT_PDF2" "$TMP_OUT_PDF1" "$pdf_file"
+      
+      TMP=$TMP_OUT_PDF2
+      TMP_OUT_PDF2=$TMP_OUT_PDF1
+      TMP_OUT_PDF1=$TMP
     done
 
     cp $TMP_OUT_PDF1 $OUT_PDF
@@ -183,8 +199,8 @@ function join_gs {
 
 function join_pdftk {
     if [ $# -lt 1 ]; then
-    	echo "missing parameter - PDF files"
-    	exit 1;
+      echo "missing parameter - PDF files"
+      exit 1;
     fi
     
     local IN_PDF=$1
@@ -204,8 +220,8 @@ function join_pdftk {
 
 function crop_last_page {
     if [ $# -lt 2 ]; then
-    	echo "missing parameter - PDF file"
-    	exit 1;
+      echo "missing parameter - PDF file"
+      exit 1;
     fi
     local IN_PDF="$1"
     local OUT_PDF="$2"
@@ -247,9 +263,9 @@ function crop_last_page {
     
     
     if [ $TARGET_HEIGHT -ge $PDF_HEIGHT ]; then
-    	## target height exceeds current - do not need to crop - just copy file
-    	echo "Nothing to crop"
-    	return 1
+      ## target height exceeds current - do not need to crop - just copy file
+      echo "Nothing to crop"
+      return 1
     fi
     
     
@@ -271,8 +287,8 @@ function crop_last_page {
 
 function change_last_page {
     if [ $# -lt 2 ]; then
-    	echo "missing parameter - PDF file"
-    	exit 1;
+      echo "missing parameter - PDF file"
+      exit 1;
     fi
     IN_PDF="$1"
     OUT_PDF="$2"
@@ -285,22 +301,22 @@ function change_last_page {
     crop_last_page "$IN_PDF" "$CROPPED_PDF"
     CROP_RET=$?
     if [ $CROP_RET -ne 0 ]; then
-    	## not cropped
-    	cp "$IN_PDF" "$OUT_PDF"
-    	
-    	rm $SHORTENED_PDF
-    	rm $CROPPED_PDF
-    	return 1
+      ## not cropped
+      cp "$IN_PDF" "$OUT_PDF"
+      
+      rm $SHORTENED_PDF
+      rm $CROPPED_PDF
+      return 1
     fi
     
     PAGES_NUM=$( pdfinfo "$IN_PDF" | grep 'Pages' - | awk '{print $2}' )
     if [ $PAGES_NUM -lt 2 ]; then
-    	## only one page - just copy last page
-    	cp "$CROPPED_PDF" "$OUT_PDF"
-    	
-    	rm $SHORTENED_PDF
-    	rm $CROPPED_PDF
-    	return 
+      ## only one page - just copy last page
+      cp "$CROPPED_PDF" "$OUT_PDF"
+      
+      rm $SHORTENED_PDF
+      rm $CROPPED_PDF
+      return 
     fi
     
     LAST_PAGE=$( echo "scale=2; $PAGES_NUM - 1" | bc )
@@ -324,9 +340,9 @@ function change_last_page {
  
 function shorten_all {
     for pdf_file in $TMP_DIR/*; do	
-    	out_file="$OUT_DIR/$(basename $pdf_file)"
-    	echo -e "\nCropping: $pdf_file -> $out_file"
-    	change_last_page "$pdf_file" "$out_file"
+      out_file="$OUT_DIR/$(basename $pdf_file)"
+      echo -e "\nCropping: $pdf_file -> $out_file"
+      change_last_page "$pdf_file" "$out_file"
     done
 }
 
