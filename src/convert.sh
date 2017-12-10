@@ -108,8 +108,28 @@ check_command pdfinfo poppler-utils
 
 
 
-TMP_DIR="$SCRIPT_DIR/tmp-pdf"
-OUT_DIR="$SCRIPT_DIR/crop-pdf"
+TMP_ROOT=$(mktemp -d -t "web2pdf-XXXXXXX")
+
+## check if tmp dir was created
+if [[ ! "$TMP_ROOT" || ! -d "$TMP_ROOT" ]]; then
+    echo "Could not create temp dir"
+    exit 1
+fi
+
+## deletes the temp directory
+function cleanup {      
+    rm -rf "$TMP_ROOT"
+    echo "Deleted temp working directory $TMP_ROOT"
+}
+
+## register the cleanup function to be called on the EXIT signal
+trap cleanup EXIT
+
+echo "Created temporary directory: $TMP_ROOT"
+
+
+TMP_DIR="$TMP_ROOT/tmp-pdf"
+OUT_DIR="$TMP_ROOT/crop-pdf"
 
 mkdir -p $OUT_DIR
 mkdir -p "$TMP_DIR"
