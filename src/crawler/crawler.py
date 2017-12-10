@@ -217,9 +217,14 @@ class WebCrawler:
         c.setopt(c.FOLLOWLOCATION, True)        ## follow redirects
         c.perform()
         c.close()
-
+        
         bodyOutput = sbuffer.getvalue()
-        body = bodyOutput.lower()
+        return self.extractPageLinks(bodyOutput)
+
+
+    def extractPageLinks(self, bodyOutput):
+        body = bodyOutput
+        ##body = bodyOutput.lower()
         
         # Body is a string in some encoding.
         # In Python 2, we can print it without knowing what the encoding is.
@@ -228,7 +233,7 @@ class WebCrawler:
         ## urlparse - extract url components
         
         ##linkregex = re.compile('<a\s*href=[\'|"](.*?)[\'"].*?>')
-        linkregex = re.compile('<a[^>]*href=[\'|"](.*?)[\'"].*?>')
+        linkregex = re.compile('<[aA][^>]*[hH][rR][eE][fF]=[\'|"](.*?)[\'"].*?>')
         links = linkregex.findall( body )
         return links
 

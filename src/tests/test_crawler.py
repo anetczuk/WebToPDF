@@ -167,6 +167,12 @@ class WebCrawlerTest(unittest.TestCase):
         #self.assertEqual( crawl.url_path, "http://www.google.com/aaa/bbb")
         
         
+    def test_extractPageLinks_casesensitive(self):
+        crawl = crawler.WebCrawler()
+        page = "<a href='PAGE1.html'>link1</a><A HREF='Page2.html'>link2</a>"
+        links = crawl.extractPageLinks(page)
+        self.assertEqual( links, ["PAGE1.html", "Page2.html"])
+        
     def test_crawl(self):
         crawl = crawler.WebCrawler()
         crawl.crawl("www.google.com")
