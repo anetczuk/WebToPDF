@@ -134,7 +134,8 @@ function convert_webpage {
             fi
         else
             ## local converter
-          wkhtmltopdf $line $output_file
+          wkhtmltopdf --javascript-delay 3000 --no-stop-slow-scripts --enable-javascript $line $output_file
+          ##wkhtmltopdf $line $output_file
         fi
     done < "$INPUT_FILE"
 }
