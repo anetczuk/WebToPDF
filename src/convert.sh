@@ -29,6 +29,7 @@ ARGS_NO=$#
 SHOW_HELP=""
 INPUT_FILE=""
 ONLINE_CONVERT=""
+LOCAL_TEMP=""
 SKIP_CONVERT=""
 SKIP_SHORTEN=""
 SKIP_JOIN=""
@@ -42,6 +43,9 @@ case $i in
                             shift                   # past argument=value
                             ;;
     -oc|--onlineconvert)    ONLINE_CONVERT=1
+                            shift                   # past argument with no value
+                            ;;
+    -lt|--localtemp)        LOCAL_TEMP=1
                             shift                   # past argument with no value
                             ;;
     -sc|--skipconvert)      SKIP_CONVERT=1
@@ -80,6 +84,10 @@ if [ -z "$INPUT_FILE" ]; then
 fi
 
 
+input_filename=$(basename $INPUT_FILE)
+OUTPUT_FILE="${input_filename%.*}"".pdf"
+
+
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 
@@ -108,24 +116,28 @@ check_command pdfinfo poppler-utils
 
 
 
-TMP_ROOT=$(mktemp -d -t "web2pdf-XXXXXXX")
+TMP_ROOT=$SCRIPT_DIR
 
-## check if tmp dir was created
-if [[ ! "$TMP_ROOT" || ! -d "$TMP_ROOT" ]]; then
-    echo "Could not create temp dir"
-    exit 1
+if [ -z "$LOCAL_TEMP" ]; then
+    TMP_ROOT=$(mktemp -d -t "web2pdf-XXXXXXX")
+    
+    ## check if tmp dir was created
+    if [[ ! "$TMP_ROOT" || ! -d "$TMP_ROOT" ]]; then
+        echo "Could not create temp dir"
+        exit 1
+    fi
+    
+    ## deletes the temp directory
+    function cleanup {      
+        rm -rf "$TMP_ROOT"
+        echo "Deleted temp working directory $TMP_ROOT"
+    }
+    
+    ## register the cleanup function to be called on the EXIT signal
+    trap cleanup EXIT
+    
+    echo "Created temporary directory: $TMP_ROOT"
 fi
-
-## deletes the temp directory
-function cleanup {      
-    rm -rf "$TMP_ROOT"
-    echo "Deleted temp working directory $TMP_ROOT"
-}
-
-## register the cleanup function to be called on the EXIT signal
-trap cleanup EXIT
-
-echo "Created temporary directory: $TMP_ROOT"
 
 
 TMP_DIR="$TMP_ROOT/tmp-pdf"
@@ -225,7 +237,7 @@ function join_pdftk {
     fi
     
     local IN_PDF=$1
-    local OUT_PDF="$SCRIPT_DIR/pdftk-book.pdf"
+    local OUT_PDF="$SCRIPT_DIR/$OUTPUT_FILE"
 
     echo "Merging: $IN_PDF to $OUT_PDF"
 
