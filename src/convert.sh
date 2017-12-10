@@ -33,6 +33,7 @@ LOCAL_TEMP=""
 SKIP_CONVERT=""
 SKIP_SHORTEN=""
 SKIP_JOIN=""
+DISABLE_JAVASCRIPT=""
 
 for i in "$@"; do
 case $i in
@@ -55,6 +56,9 @@ case $i in
                             shift                   # past argument with no value
                             ;;
     -sj|--skipjoin)         SKIP_JOIN=1
+                            shift                   # past argument with no value
+                            ;;
+    -nojs|--nojs)           DISABLE_JAVASCRIPT=1
                             shift                   # past argument with no value
                             ;;
     *)                      ;;                      # unknown option    
@@ -151,12 +155,12 @@ mkdir -p "$TMP_DIR"
 function convert_webpage {
     COUNTER=0
     while read line; do           
-      COUNTER=$((COUNTER+1))
-      ##echo "$COUNTER url: $line"
-      output_file="$TMP_DIR/$(printf "%04d" $COUNTER).pdf"
-      ##echo "$output_file url: $line"
+        COUNTER=$((COUNTER+1))
+        ##echo "$COUNTER url: $line"
+        output_file="$TMP_DIR/$(printf "%04d" $COUNTER).pdf"
+        ##echo "$output_file url: $line"
       
-      echo "Converting $line to $output_file"
+        echo "Converting $line to $output_file"
         if [ -n "$ONLINE_CONVERT" ]; then
             ## online converter
             $SCRIPT_DIR/onlineconverter.py --link=$line --output=$output_file
@@ -166,8 +170,12 @@ function convert_webpage {
             fi
         else
             ## local converter
-          wkhtmltopdf --javascript-delay 3000 --no-stop-slow-scripts --enable-javascript $line $output_file
-          ##wkhtmltopdf $line $output_file
+            if [ -n "$DISABLE_JAVASCRIPT" ]; then
+                ##echo "JS disabled"
+                wkhtmltopdf $line $output_file
+            else
+                wkhtmltopdf --javascript-delay 3000 --no-stop-slow-scripts --enable-javascript $line $output_file
+            fi
         fi
     done < "$INPUT_FILE"
 }
@@ -178,13 +186,13 @@ if [ -z "$SKIP_CONVERT" ]; then
 fi
 
 
-## convert -density 160x160 -quality 100 $TMP_DIR/0001.pdf $TMP_DIR/0002.pdf test.pdf
-## gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile=test.pdf $TMP_DIR/0001.pdf $TMP_DIR/0002.pdf
-
 
 ##
 ## Join files to one PDF
 ##
+
+## convert -density 160x160 -quality 100 $TMP_DIR/0001.pdf $TMP_DIR/0002.pdf test.pdf
+## gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile=test.pdf $TMP_DIR/0001.pdf $TMP_DIR/0002.pdf
 
 function join_loop {
     TMP_OUT_PDF1="book.tmp1.pdf"
