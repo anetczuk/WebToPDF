@@ -172,9 +172,9 @@ function convert_webpage {
             ## local converter
             if [ -n "$DISABLE_JAVASCRIPT" ]; then
                 ##echo "JS disabled"
-                wkhtmltopdf $line $output_file
+                wkhtmltopdf --disable-javascript $line $output_file
             else
-                wkhtmltopdf --javascript-delay 3000 --no-stop-slow-scripts --enable-javascript $line $output_file
+                wkhtmltopdf --javascript-delay 5000 --no-stop-slow-scripts --enable-javascript $line $output_file
             fi
         fi
     done < "$INPUT_FILE"
