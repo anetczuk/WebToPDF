@@ -31,6 +31,7 @@ INPUT_FILE=""
 ONLINE_CONVERT=""
 LOCAL_TEMP=""
 SKIP_CONVERT=""
+REDUCE_QUALITY=""
 SKIP_SHORTEN=""
 SKIP_JOIN=""
 DISABLE_JAVASCRIPT=""
@@ -50,6 +51,9 @@ case $i in
                             shift                   # past argument with no value
                             ;;
     -sc|--skipconvert)      SKIP_CONVERT=1
+                            shift                   # past argument with no value
+                            ;;
+    -rq|--reduceuality)     REDUCE_QUALITY=1
                             shift                   # past argument with no value
                             ;;
     -ss|--skipshorten)      SKIP_SHORTEN=1
@@ -144,20 +148,24 @@ if [ -z "$LOCAL_TEMP" ]; then
 fi
 
 
-TMP_DIR="$TMP_ROOT/tmp-pdf"
-OUT_DIR="$TMP_ROOT/crop-pdf"
-
-mkdir -p $OUT_DIR
-mkdir -p "$TMP_DIR"
-
+CONVERT_DIR="$TMP_ROOT/convert-pdf"
+REDUCED_DIR="$TMP_ROOT/reduced-pdf"
+CROP_DIR="$TMP_ROOT/crop-pdf"
 
 
 function convert_webpage {
+    if [ $# -lt 1 ]; then
+        echo "missing parameter - input file"
+        exit 1;
+    fi
+
+    local input_file="$1"
+
     COUNTER=0
     while read line; do           
         COUNTER=$((COUNTER+1))
         ##echo "$COUNTER url: $line"
-        output_file="$TMP_DIR/$(printf "%04d" $COUNTER).pdf"
+        local output_file="$CONVERT_DIR/$(printf "%04d" $COUNTER).pdf"
         ##echo "$output_file url: $line"
       
         echo "Converting $line to $output_file"
@@ -177,82 +185,29 @@ function convert_webpage {
                 wkhtmltopdf --javascript-delay 5000 --no-stop-slow-scripts --enable-javascript $line $output_file
             fi
         fi
-    done < "$INPUT_FILE"
+    done < "$input_file"
 }
-
-if [ -z "$SKIP_CONVERT" ]; then
-    echo "Converting links to PDFs"
-    convert_webpage
-fi
-
 
 
 ##
-## Join files to one PDF
+## reduce quality
 ##
 
-## convert -density 160x160 -quality 100 $TMP_DIR/0001.pdf $TMP_DIR/0002.pdf test.pdf
-## gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile=test.pdf $TMP_DIR/0001.pdf $TMP_DIR/0002.pdf
-
-function join_loop {
-    TMP_OUT_PDF1="book.tmp1.pdf"
-    TMP_OUT_PDF2="book.tmp2.pdf"
-
-    OUT_PDF="book.pdf"
-
-    FIRST_FILE="1"
-
-    for pdf_file in $TMP_DIR/*; do
-      if [ ! -z $FIRST_FILE ]; then
-          FIRST_FILE=""
-          ##echo "first"
-          cp "$pdf_file" "$TMP_OUT_PDF1"
-          continue
-      fi
-      
-      echo "Merging: $pdf_file"
-      
-      ##gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile="$OUT_PDF" "$OUT_PDF" "$pdf_file"
-      
-      gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile="$TMP_OUT_PDF2" "$TMP_OUT_PDF1" "$pdf_file"
-      
-      TMP=$TMP_OUT_PDF2
-      TMP_OUT_PDF2=$TMP_OUT_PDF1
-      TMP_OUT_PDF1=$TMP
-    done
-
-    cp $TMP_OUT_PDF1 $OUT_PDF
-
-    rm $TMP_OUT_PDF1
-    rm $TMP_OUT_PDF2
-}
-
-function join_gs {
-    IN_PDF=$TMP_DIR/*
-    OUT_PDF="gs-book.pdf"
-
-    echo "Merging: $IN_PDF to $OUT_PDF"
-
-    gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile="$OUT_PDF" $IN_PDF
-
-    echo -e "\nDone. Output stored in $OUT_PDF"
-}
-
-function join_pdftk {
+function reduce_quality {
     if [ $# -lt 1 ]; then
-      echo "missing parameter - PDF files"
-      exit 1;
+        echo "missing parameter - output directory"
+        exit 1;
     fi
     
-    local IN_PDF=$1
-    local OUT_PDF="$SCRIPT_DIR/$OUTPUT_FILE"
-
-    echo "Merging: $IN_PDF to $OUT_PDF"
-
-    pdftk $IN_PDF cat output $OUT_PDF
-
-    echo -e "\nDone. Output stored in $OUT_PDF"
+    local input_dir=$1
+    for pdf_file in $input_dir/*; do  
+        out_file="$REDUCED_DIR/$(basename $pdf_file)"
+        echo -e "\nReducing: $pdf_file -> $out_file"
+        convert -monitor -density 120x120 -quality 60 $pdf_file $out_file
+        ## gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen -dNOPAUSE -dQUIET -dBATCH -sOutputFile=$out_file $pdf_file
+    done
 }
+
 
 
 ##
@@ -261,8 +216,8 @@ function join_pdftk {
 
 function crop_last_page {
     if [ $# -lt 2 ]; then
-      echo "missing parameter - PDF file"
-      exit 1;
+        echo "missing parameter - PDF file"
+        exit 1;
     fi
     local IN_PDF="$1"
     local OUT_PDF="$2"
@@ -313,14 +268,14 @@ function crop_last_page {
     ## cutting
     gs                           \
       -o "$OUT_PDF"              \
-      -dQUIET			 \
+      -dQUIET            \
       -sDEVICE=pdfwrite          \
       -dDEVICEWIDTHPOINTS=$PDF_WIDTH    \
       -dDEVICEHEIGHTPOINTS=$TARGET_HEIGHT   \
-      -dPDFSETTINGS=/prepress		\
-      -dFIXEDMEDIA               		\
-      -dFirstPage=$PAGES_NUM -dLastPage=$PAGES_NUM	\
-      -c "<</PageOffset [0 -$TARGET_OFFSET]>> setpagedevice" 	\
+      -dPDFSETTINGS=/prepress       \
+      -dFIXEDMEDIA                      \
+      -dFirstPage=$PAGES_NUM -dLastPage=$PAGES_NUM  \
+      -c "<</PageOffset [0 -$TARGET_OFFSET]>> setpagedevice"    \
       -f "$IN_PDF"
       
     return 0
@@ -366,9 +321,9 @@ function change_last_page {
     ## cutting
     gs                           \
       -o "$SHORTENED_PDF"        \
-      -dQUIET			 \
+      -dQUIET            \
       -sDEVICE=pdfwrite          \
-      -dFirstPage=1 -dLastPage=$LAST_PAGE	 \
+      -dFirstPage=1 -dLastPage=$LAST_PAGE    \
       -f "$IN_PDF"
       
     ## merge PDFs
@@ -380,25 +335,121 @@ function change_last_page {
 }
  
 function shorten_all {
-    for pdf_file in $TMP_DIR/*; do	
-      out_file="$OUT_DIR/$(basename $pdf_file)"
-      echo -e "\nCropping: $pdf_file -> $out_file"
-      change_last_page "$pdf_file" "$out_file"
+    if [ $# -lt 1 ]; then
+        echo "missing parameter - output directory"
+        exit 1;
+    fi
+    
+    local input_dir=$1
+    for pdf_file in $input_dir/*; do  
+        out_file="$CROP_DIR/$(basename $pdf_file)"
+        echo -e "\nCropping: $pdf_file -> $out_file"
+        change_last_page "$pdf_file" "$out_file"
     done
 }
 
 
+##
+## Join files to one PDF
+##
+
+## convert -density 160x160 -quality 100 $CONVERT_DIR/0001.pdf $CONVERT_DIR/0002.pdf test.pdf
+## gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile=test.pdf $CONVERT_DIR/0001.pdf $CONVERT_DIR/0002.pdf
+
+function join_loop {
+    TMP_OUT_PDF1="book.tmp1.pdf"
+    TMP_OUT_PDF2="book.tmp2.pdf"
+
+    OUT_PDF="book.pdf"
+
+    FIRST_FILE="1"
+
+    for pdf_file in $CONVERT_DIR/*; do
+      if [ ! -z $FIRST_FILE ]; then
+          FIRST_FILE=""
+          ##echo "first"
+          cp "$pdf_file" "$TMP_OUT_PDF1"
+          continue
+      fi
+      
+      echo "Merging: $pdf_file"
+      
+      ##gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile="$OUT_PDF" "$OUT_PDF" "$pdf_file"
+      
+      gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile="$TMP_OUT_PDF2" "$TMP_OUT_PDF1" "$pdf_file"
+      
+      TMP=$TMP_OUT_PDF2
+      TMP_OUT_PDF2=$TMP_OUT_PDF1
+      TMP_OUT_PDF1=$TMP
+    done
+
+    cp $TMP_OUT_PDF1 $OUT_PDF
+
+    rm $TMP_OUT_PDF1
+    rm $TMP_OUT_PDF2
+}
+
+function join_gs {
+    IN_PDF=$CONVERT_DIR/*
+    OUT_PDF="gs-book.pdf"
+
+    echo "Merging: $IN_PDF to $OUT_PDF"
+
+    gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile="$OUT_PDF" $IN_PDF
+
+    echo -e "\nDone. Output stored in $OUT_PDF"
+}
+
+function join_pdftk {
+    if [ $# -lt 1 ]; then
+        echo "missing parameter - PDF files"
+        exit 1;
+    fi
+    
+    local IN_PDF=$1
+    local OUT_PDF="$SCRIPT_DIR/$OUTPUT_FILE"
+
+    echo "Merging: $IN_PDF to $OUT_PDF"
+
+    pdftk $IN_PDF cat output $OUT_PDF
+
+    echo -e "\nDone. Output stored in $OUT_PDF"
+}
+
+
+###
+### =========================================================================
+###
+
+
+
+if [ -z "$SKIP_CONVERT" ]; then
+    mkdir -p "$CONVERT_DIR"
+    echo "Converting links to PDFs"
+    convert_webpage "$INPUT_FILE"
+fi
+INPUT_DIR="$CONVERT_DIR"
+
+
+if [ -n "$REDUCE_QUALITY" ]; then
+    mkdir -p "$REDUCED_DIR"
+    echo "Reducing quality"
+    reduce_quality "$INPUT_DIR"
+    INPUT_DIR="$REDUCED_DIR"
+fi
 
 
 if [ -z "$SKIP_SHORTEN" ]; then
+    mkdir -p "$CROP_DIR"
     echo "Cropping PDFs"
-    shorten_all
+    shorten_all "$INPUT_DIR"
+    INPUT_DIR="$CROP_DIR"
 fi
 
 
 if [ -z "$SKIP_JOIN" ]; then
     echo "Joining PDFs"
-    join_pdftk "$OUT_DIR/*"
+    join_pdftk "$INPUT_DIR/*"
 fi
 
 
